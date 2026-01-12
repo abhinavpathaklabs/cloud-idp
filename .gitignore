@@ -94,3 +94,5 @@ venv/
 tmp/
 temp/
 *.tmp
+casc.yaml.tpl
+plugins.txt.tpl

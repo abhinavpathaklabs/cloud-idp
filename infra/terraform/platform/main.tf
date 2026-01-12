@@ -70,9 +70,9 @@ module "eks" {
     default = {
       instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
-      min_size       = 1
-      max_size       = 3
-      desired_size   = 2
+      min_size       = 2
+      max_size       = 5
+      desired_size   = 3
     }
   }
 
@@ -102,19 +102,18 @@ data "aws_eks_cluster_auth" "this" {
   depends_on = [module.eks]
 }
 
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.this.token
-}
-
 provider "helm" {
   kubernetes {
-    host                   = data.aws_eks_cluster.this.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.this.token
+    config_path = pathexpand("~/.kube/config")
   }
 }
+
+
+
+provider "kubernetes" {
+  config_path = pathexpand("~/.kube/config")
+}
+
 
 
 # --- Jenkins EC2 ---

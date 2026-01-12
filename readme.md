@@ -75,39 +75,120 @@ This creates delay and inconsistency.
 
 ---
 
-## 🧠 Architecture (clear + readable)
+🧠 Architecture (clear + readable)
 
-```mermaid
-flowchart TD
-  Dev([👨‍💻 Developer]) -->|Clicks Jenkins job| J[Jenkins on EC2<br/>(Docker + JCasC)]
-  J -->|create-env| TF1[Terraform (service-env)<br/>Provision: Namespace + Quotas + ECR + Secrets]
-  J -->|deploy-service| CI[CI/CD Pipeline<br/>Build → Scan → Push → Deploy]
+Cloud IDP is a mini Internal Developer Platform (IDP) built with a clear separation between a control plane (where automation happens) and a runtime plane (where applications run).
 
-  CI --> B[🐳 Docker Build]
-  CI --> S[🔍 Trivy Scan]
-  CI --> P[📦 Push to ECR]
-  CI --> H[⛵ Helm Deploy to EKS]
+1) Source of truth: GitHub
 
-  TF1 --> NS[🗂️ Namespace: dev-&lt;service&gt;]
-  H --> NS
-  NS --> K8S[☸️ Kubernetes Objects<br/>Deployment + Service + Ingress]
+Everything lives in one GitHub repo:
 
-  subgraph AWS[AWS]
-    ECR[(ECR)]
-    EKS[(EKS Cluster)]
-    SM[(Secrets Manager)]
-    S3[(S3 State)]
-    DDB[(DynamoDB Lock)]
-  end
+Terraform code to create AWS infrastructure and service environments
 
-  P --> ECR
-  H --> EKS
-  TF1 --> SM
-  TF1 --> S3
-  TF1 --> DDB
-  K8S --> EKS
+Jenkinsfiles that define the self-service pipelines (create-env, deploy-service)
 
-```
+Helm chart used to deploy a sample service to Kubernetes
+
+GitHub is the single place where platform changes are reviewed and versioned.
+
+2) Control plane: Jenkins on EC2
+
+Jenkins runs on an EC2 instance (inside Docker) and acts as the self-service portal:
+
+Developers interact only with Jenkins (click jobs + provide parameters)
+
+Jenkins pulls pipeline code from GitHub
+
+Jenkins executes the automation steps:
+
+runs Terraform to provision infrastructure/environment resources
+
+runs Docker to build container images
+
+runs Trivy to scan images for vulnerabilities
+
+runs Helm/kubectl to deploy to Kubernetes
+
+Jenkins is pre-configured using JCasC (Jenkins Configuration as Code) so it comes up ready without manual setup.
+
+3) Platform infrastructure: AWS (created by Terraform)
+
+Terraform provisions the shared platform components:
+
+S3 + DynamoDB for Terraform remote state + state locking
+
+VPC networking (public/private subnets, NAT)
+
+EKS cluster (Kubernetes control plane) and managed node group (worker nodes)
+
+IAM roles/policies so Jenkins can call AWS APIs safely using an instance profile
+
+SSM Parameter Store to publish cluster metadata (like cluster name / OIDC ARN) for other stacks to read
+
+This makes the platform reproducible and safe to automate.
+
+4) Runtime plane: EKS (Kubernetes)
+
+EKS is where applications actually run. The platform uses a consistent model:
+
+Each service/environment gets its own namespace (example: dev-payments)
+
+Deployments are done via Helm, producing standard Kubernetes objects:
+
+Deployment
+
+Service
+
+(Optional) Ingress
+
+This gives isolation, repeatability, and a clean “service boundary” per namespace.
+
+5) Two self-service workflows
+
+Cloud IDP exposes two “buttons” in Jenkins:
+
+A) create-env (Provision an environment)
+When triggered with SERVICE_NAME=payments, ENV=dev, it provisions:
+
+Kubernetes namespace dev-payments
+
+ResourceQuota + LimitRange (governance)
+
+ECR repository for container images (payments-dev)
+
+Secrets Manager secret for the service (dev/payments/app)
+
+B) deploy-service (Build and deploy a service)
+When triggered with SERVICE_NAME=payments, ENV=dev, it:
+
+Builds a Docker image from the repo
+
+Scans it with Trivy (security gate)
+
+Pushes the image to ECR
+
+Deploys/updates the service in dev-payments using Helm
+
+6) How everything is connected
+
+GitHub stores the definitions (IaC + pipelines + Helm)
+
+Jenkins is the execution engine and self-service interface
+
+Terraform creates and updates AWS + Kubernetes resources
+
+EKS runs the workloads
+
+ECR stores images built by Jenkins
+
+S3/DynamoDB store Terraform state so automation is safe and consistent
+
+SSM stores cluster metadata so different Terraform stacks can integrate cleanly
+
+In simple terms:
+Jenkins is the portal, Terraform is the engine, EKS is the runtime.
+
+
 
 ---
 

@@ -37,3 +37,6 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+asc.yaml.tpl
+plugins.txt.tpl
