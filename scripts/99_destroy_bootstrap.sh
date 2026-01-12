@@ -3,7 +3,4 @@ set -euo pipefail
 
 cd infra/terraform/bootstrap
 terraform init
-terraform apply -auto-approve
-echo ""
-echo "Copy outputs:"
-terraform output
+terraform destroy -auto-approve

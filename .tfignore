@@ -1,0 +1,39 @@
+# Terraform local cache
+.terraform/
+**/.terraform/*
+
+# State files
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Logs
+*.log
+crash.log
+
+# Git
+.git/
+.gitignore
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS junk
+Thumbs.db
+
+# Credentials
+.aws/
+.kube/
+*.pem
+*.key
+*.pub
+
+# Temporary files
+tmp/
+temp/
+*.tmp

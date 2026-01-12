@@ -1,0 +1,57 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'SERVICE_NAME', defaultValue: 'payments', description: 'Service name')
+    choice(name: 'ENV', choices: ['dev'], description: 'Environment (MVP uses dev)')
+    choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Provision or destroy')
+  }
+
+  environment {
+    AWS_REGION = "us-east-1"
+    PROJECT    = "cloud-idp"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Terraform Init') {
+      steps {
+        dir('infra/terraform/service-env') {
+          sh """
+            terraform init -reconfigure \
+              -backend-config="bucket=${TF_STATE_BUCKET}" \
+              -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+              -backend-config="region=${AWS_REGION}" \
+              -backend-config="key=services/${ENV}/${SERVICE_NAME}.tfstate"
+          """
+        }
+      }
+    }
+
+    stage('Terraform Apply/Destroy') {
+      steps {
+        dir('infra/terraform/service-env') {
+          sh """
+            terraform ${ACTION} -auto-approve \
+              -var="region=${AWS_REGION}" \
+              -var="project=${PROJECT}" \
+              -var="env=${ENV}" \
+              -var="service_name=${SERVICE_NAME}"
+          """
+        }
+      }
+    }
+
+    stage('Show Outputs') {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
+        dir('infra/terraform/service-env') {
+          sh "terraform output -json"
+        }
+      }
+    }
+  }
+}

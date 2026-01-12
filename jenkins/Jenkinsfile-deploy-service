@@ -1,0 +1,106 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'SERVICE_NAME', defaultValue: 'payments', description: 'Service name')
+    choice(name: 'ENV', choices: ['dev'], description: 'Environment')
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional tag (defaults to build number)')
+  }
+
+  environment {
+    AWS_REGION = "us-east-1"
+    PROJECT    = "cloud-idp"
+    TAG        = "${params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Resolve ECR Repo from Terraform State') {
+      steps {
+        dir('infra/terraform/service-env') {
+          sh """
+            terraform init -reconfigure \
+              -backend-config="bucket=${TF_STATE_BUCKET}" \
+              -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+              -backend-config="region=${AWS_REGION}" \
+              -backend-config="key=services/${ENV}/${SERVICE_NAME}.tfstate"
+          """
+          script {
+            def out = sh(script: "terraform output -raw ecr_repo_url", returnStdout: true).trim()
+            env.ECR_REPO = out
+          }
+        }
+      }
+    }
+
+    stage('Build Docker Image (demo image)') {
+      steps {
+        sh """
+          cat > /tmp/app.py <<'EOF'
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class H(BaseHTTPRequestHandler):
+  def do_GET(self):
+    if self.path == '/health':
+      self.send_response(200); self.end_headers(); self.wfile.write(b'OK')
+    else:
+      self.send_response(200); self.end_headers(); self.wfile.write(b'Hello from sample-service')
+HTTPServer(('0.0.0.0', 8080), H).serve_forever()
+EOF
+
+          cat > /tmp/Dockerfile <<'EOF'
+FROM python:3.12-slim
+WORKDIR /app
+COPY app.py /app/app.py
+EXPOSE 8080
+CMD ["python", "app.py"]
+EOF
+
+          docker build -t ${ECR_REPO}:${TAG} -f /tmp/Dockerfile /tmp
+        """
+      }
+    }
+
+    stage('Scan Image (Trivy)') {
+      steps {
+        sh "trivy image --exit-code 1 --severity CRITICAL ${ECR_REPO}:${TAG} || true"
+      }
+    }
+
+    stage('Push to ECR') {
+      steps {
+        sh """
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $(echo ${ECR_REPO} | cut -d/ -f1)
+          docker push ${ECR_REPO}:${TAG}
+        """
+      }
+    }
+
+    stage('Deploy to EKS via Helm') {
+      steps {
+        sh """
+          CLUSTER_NAME=$(aws ssm get-parameter --name "/${PROJECT}/${ENV}/cluster_name" --region ${AWS_REGION} --query 'Parameter.Value' --output text)
+          aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+
+          NAMESPACE=${ENV}-${SERVICE_NAME}
+
+          helm upgrade --install sample-service deploy/helm/sample-service \
+            -n ${NAMESPACE} --create-namespace \
+            --set image.repository=${ECR_REPO} \
+            --set image.tag=${TAG}
+        """
+      }
+    }
+
+    stage('Smoke Test') {
+      steps {
+        sh """
+          echo "Check ALB address after AWS LB Controller is installed:"
+          kubectl -n ${ENV}-${SERVICE_NAME} get ingress -o wide || true
+        """
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+image:
+  repository: ""
+  tag: "latest"
+
+service:
+  port: 8080
+
+ingress:
+  enabled: true
+  host: ""

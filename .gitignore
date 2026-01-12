@@ -1,0 +1,96 @@
+############################
+# Terraform
+############################
+
+# Local terraform directories
+**/.terraform/*
+.terraform/
+
+# Terraform state files (NEVER commit)
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Terraform plan output
+*.tfplan
+
+############################
+# Terraform override files
+############################
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+############################
+# Terraform CLI config
+############################
+.terraformrc
+terraform.rc
+
+############################
+# AWS / Cloud credentials
+############################
+.aws/
+aws-credentials
+credentials
+config
+
+############################
+# SSH Keys
+############################
+*.pem
+*.key
+*.pub
+
+############################
+# Jenkins
+############################
+jenkins_home/
+jenkins-data/
+jenkins.log
+
+############################
+# Docker
+############################
+*.log
+*.pid
+
+############################
+# Kubernetes
+############################
+.kube/
+kubeconfig
+*.kubeconfig
+
+############################
+# OS / Editor junk
+############################
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+############################
+# Python (if used in demos)
+############################
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+
+############################
+# Temporary files
+############################
+tmp/
+temp/
+*.tmp
